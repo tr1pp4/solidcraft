@@ -163,10 +163,42 @@ fn history_plan(app: &SolveApp, indices: &[usize], marker: usize) -> HistoryRows
     crate::history_rows::rows(&features, &doc.timeline_groups, (local < features.len()).then_some(local), false)
 }
 
-/// What a selected history row lights up: a feature's sketches, and the features built from a
-/// selected sketch.
+/// The feature that made a body picked in the browser's Bodies folder.
+fn picked_body_feature(app: &SolveApp) -> Option<u64> {
+    let state = app.session.world_state();
+    app.session
+        .selection
+        .iter()
+        .find_map(|selection| match selection {
+            Sel::Body { name } => state.body(name).map(|b| b.feature),
+            _ => None,
+        })
+        .filter(|id| app.session.doc.feature(*id).is_some())
+}
+
+/// With the history in the browser, picking a face or edge in the view opens the history at
+/// the feature that made it, once per pick.
+pub(crate) fn follow_view(app: &mut SolveApp) {
+    if !app.preferences.history_in_browser {
+        app.tree.history_pick = None;
+        return;
+    }
+    let picked = crate::timeline::picked_feature(app);
+    if picked == app.tree.history_pick {
+        return;
+    }
+    app.tree.history_pick = picked;
+    if let Some(id) = picked {
+        reveal_in_history(app, id);
+    }
+}
+
+/// What lights a history row: a selected feature's sketches, the features built from a selected
+/// sketch, and the feature of the geometry picked in the view or under its pointer.
 fn lit_by_selection(app: &SolveApp) -> BTreeSet<u64> {
     let mut lit = BTreeSet::new();
+    lit.extend(crate::timeline::picked_feature(app).or_else(|| picked_body_feature(app)));
+    lit.extend(crate::timeline::hovered_feature(app));
     let doc = &app.session.doc;
     for selection in &app.session.selection {
         let Sel::Feature { id } = selection else { continue };
@@ -857,5 +889,32 @@ mod tests {
         h.frames(2);
         assert!(!shown(&h), "closing the dialog hides it again");
         assert!(h.app.session.visibility.hidden_sketches.contains(&two), "its eye's setting is back");
+    }
+
+    /// A face picked in the view lights the feature that made it (the hole, not the block it
+    /// was cut into) and opens the history at it.
+    #[test]
+    fn browser_history_follows_a_face_picked_in_the_view_to_its_feature() {
+        let mut h = Harness::new();
+        h.app.run("view.history_layout", json!({"dock":"browser"})).unwrap();
+        let block = h.app.run("solid.box", json!({"length":20,"width":20,"height":10,"name":"Block","body_name":"Block"})).unwrap()["feature"]
+            .as_u64()
+            .unwrap();
+        let hole = h.app.run("solid.cylinder", json!({"base":[10,10,-1],"radius":3,"height":12,"operation":"cut","name":"Hole"})).unwrap()["feature"]
+            .as_u64()
+            .unwrap();
+        h.app.tree.collapsed.insert("c0/history".into());
+        h.frames(2);
+        let state = h.app.session.world_state();
+        let body = state.bodies.first().unwrap();
+        let names = solidcraft_engine::doc::naming::face_names(body);
+        let index = names.iter().position(|name| name.starts_with(&format!("F{hole}:"))).unwrap();
+        let body_name = body.name.clone();
+        h.app.run("select.set", json!({"items":[{"type":"face","body":body_name,"index":index,"point":[0,0,0]}]})).unwrap();
+        h.frames(3);
+        assert_eq!(h.app.tree.history_pick, Some(hole), "the hole made the face");
+        assert!(!h.app.tree.collapsed.contains("c0/history"), "the history opens at it");
+        let lit = lit_by_selection(&h.app);
+        assert!(lit.contains(&hole) && !lit.contains(&block), "{lit:?}");
     }
 }

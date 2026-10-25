@@ -68,6 +68,11 @@ pub(crate) fn end_sketch_peek(app: &mut SolveApp) {
     features::end_peek(app);
 }
 
+/// The history in the browser follows a face, edge or body picked in the view to its feature.
+pub(crate) fn follow_view_pick(app: &mut SolveApp) {
+    features::follow_view(app);
+}
+
 #[cfg(test)]
 #[path = "browser_model_tests.rs"]
 mod model_tests;
@@ -119,6 +124,9 @@ pub struct TreeState {
     pub(super) reveal_feature: Option<features::Reveal>,
     /// A sketch shown while a dialog takes its profiles: (id, hidden by its eye before).
     pub(super) peek_sketch: Option<(u64, bool)>,
+    /// The feature of the geometry picked in the view, last revealed in the history in the
+    /// browser (`view_pick` is the timeline's).
+    pub(super) history_pick: Option<u64>,
     /// The Move/Copy panel of an occurrence.
     pub occurrence_move: Option<OccMove>,
     /// The Redefine Sketch Plane panel (sketch id).
