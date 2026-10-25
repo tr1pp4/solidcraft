@@ -64,6 +64,10 @@ pub(crate) fn reveal_in_history(app: &mut SolveApp, id: u64) {
     features::reveal_in_history(app, id);
 }
 
+pub(crate) fn end_sketch_peek(app: &mut SolveApp) {
+    features::end_peek(app);
+}
+
 #[cfg(test)]
 #[path = "browser_model_tests.rs"]
 mod model_tests;
@@ -113,6 +117,8 @@ pub struct TreeState {
     pub reveal: Option<String>,
     /// A native feature to reveal in its placed component's Features folder (Find in Timeline).
     pub(super) reveal_feature: Option<features::Reveal>,
+    /// A sketch shown while a dialog takes its profiles: (id, hidden by its eye before).
+    pub(super) peek_sketch: Option<(u64, bool)>,
     /// The Move/Copy panel of an occurrence.
     pub occurrence_move: Option<OccMove>,
     /// The Redefine Sketch Plane panel (sketch id).
@@ -215,6 +221,10 @@ pub fn sketch_visible(app: &SolveApp, id: u64) -> bool {
 }
 
 pub fn set_sketch_visible(app: &mut SolveApp, id: u64, on: bool) {
+    // Set by its eye: no longer only shown for a dialog.
+    if app.tree.peek_sketch.is_some_and(|(peeked, _)| peeked == id) {
+        app.tree.peek_sketch = None;
+    }
     // Through the command, so showing or hiding a sketch is an undo step too (#2219).
     let _ = app.run("browser.visibility", json!({ "items": [id], "visible": on }));
 }

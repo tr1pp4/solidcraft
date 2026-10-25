@@ -2474,6 +2474,7 @@ impl SolveApp {
             render_ui::shots_strip(self, ui);
             render_workspace::panel(self, ui);
         }
+        browser::end_sketch_peek(self);
         if self.ui.show_browser && !render_ui::focused(self) {
             browser::browser(self, ui);
         }
